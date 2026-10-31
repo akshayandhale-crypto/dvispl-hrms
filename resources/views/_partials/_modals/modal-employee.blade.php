@@ -38,7 +38,7 @@
           </div>
           <div class="col-md-3 col-12 mb-4">
             <label class="form-label w-100" for="nationalNumber">{{ __('National Number') }}</label>
-            <input wire:model.defer="employeeInfo.nationalNumber" class="form-control @error('employeeInfo.nationalNumber') is-invalid @enderror" id="employeeInfo.nationalNumber" placeholder="02000000000" type="text" maxlength="11">
+            <input wire:model.defer="employeeInfo.nationalNumber" class="form-control @error('employeeInfo.nationalNumber') is-invalid @enderror" id="employeeInfo.nationalNumber" placeholder="Enter government ID" type="text" maxlength="20">
             @error('employeeInfo.nationalNumber')
             <div class="invalid-feedback">
                 {{ $message }}
@@ -47,7 +47,7 @@
           </div>
           <div class="col-md-3 col-12 mb-4">
             <label class="form-label w-100" for="mobile">{{ __('Mobile') }}</label>
-            <input wire:model.defer="employeeInfo.mobileNumber" class="form-control @error('employeeInfo.mobileNumber') is-invalid @enderror" id="employeeInfo.mobile" placeholder="900000000" type="text" maxlength="9">
+            <input wire:model.defer="employeeInfo.mobileNumber" class="form-control @error('employeeInfo.mobileNumber') is-invalid @enderror" id="employeeInfo.mobile" placeholder="10-digit mobile number" type="tel" maxlength="10" inputmode="numeric">
             @error('employeeInfo.mobileNumber')
             <div class="invalid-feedback">
                 {{ $message }}
