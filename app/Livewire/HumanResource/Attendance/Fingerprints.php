@@ -100,6 +100,7 @@ class Fingerprints extends Component
             ->where('is_active', true)
             ->whereHas('hostelAssignments', function ($query) use ($hostelIds) {
                 $query->whereIn('hostel_id', $hostelIds)
+                    ->whereDate('start_date', '<=', Carbon::today()->toDateString())
                     ->whereNull('end_date');
             });
     }
