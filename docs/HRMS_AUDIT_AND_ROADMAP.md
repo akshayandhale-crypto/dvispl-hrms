@@ -2,12 +2,14 @@
 
 Audit baseline: 2026-10-31
 Target users: Office employees and staff across multiple hostels.
+Confirmed attendance approach: Manual attendance entry (no biometric device integration in this phase).
+Confirmed payroll scope: Attendance and leave data for payroll preparation only; no salary calculation/payslip module until separately approved.
 Priority: Stabilize existing workflows before adding payroll or other modules.
 
 ## Current application inventory
 
 - Laravel 10, Livewire 3, MySQL-oriented schema, Laravel Sail/Docker.
-- Existing areas: employee records, organization structure (centers/departments/positions), timelines, fingerprint attendance import, leave management, holidays, discounts, messaging, asset inventory, user roles.
+- Existing areas: employee records, organization structure (centers/departments/positions), timelines, attendance records currently named fingerprints, Excel attendance import, leave management, holidays, discounts, messaging, asset inventory, user roles.
 - Existing automated tests are primarily Laravel Jetstream authentication/profile/session/token scaffolding. HR attendance, leave, imports, authorization boundaries, payroll and multi-hostel workflows have no meaningful feature coverage identified in the current test tree.
 - No payroll, salary structure, payslip, recruitment, candidate or onboarding implementation was found in the current application tree.
 
@@ -77,18 +79,15 @@ Keep organizational department/designation separate from physical work location:
 
 Do not overload the existing centers table until its current production usage and holiday/working-hour dependencies are verified.
 
-### Biometric attendance integration
+### Manual attendance and payroll preparation
 
-Recommended flow:
-1. Capture raw device export/API payload in an immutable import batch.
-2. Map device user/employee number to the HRMS employee code (not implicitly to database primary key).
-3. Normalize punches with device timezone and Asia/Kolkata.
-4. De-duplicate device events using device ID + punch ID (or a stable event fingerprint).
-5. Apply shift rules to derive daily attendance, late marks, overtime and missing punches.
-6. Route exceptions for HR/warden review; preserve raw logs for audit.
-7. Support a controlled manual correction process with reason and approver.
-
-Device model, protocol, export format and biometric employee-number mapping must be confirmed before implementing a vendor-specific connector.
+- Allow authorized HR/Admin users to add, edit and review daily check-in/check-out records.
+- Add a future Warden/Supervisor workflow scoped to the employee's assigned hostel/location; do not grant broad HR access to hostel users.
+- Validate employee, date and time formats; prevent duplicate employee/date entries and retain who created or amended each record.
+- Add reason and approver details for corrections, late marks, missing punches and overtime.
+- Derive monthly payable days, paid/unpaid leave, absences and approved overtime as payroll inputs.
+- Payroll scope in this phase is attendance/leave reporting and export only. Salary structures, statutory calculations and payslips are out of scope until explicitly approved.
+- Keep the existing Excel import only if HR confirms it is an approved manual/bulk-upload process; do not connect biometric hardware or treat machine identifiers as employee database IDs.
 
 ### Payroll (after attendance foundation)
 
@@ -108,8 +107,8 @@ Do not hardcode statutory rates or tax rules; make them configurable and verify 
 2. Verify migration compatibility and data quality on a database copy.
 3. Add automated tests and staging validation.
 4. Add work locations, hostel assignments, shift and warden/supervisor scope.
-5. Integrate biometric device using confirmed vendor format/API.
-6. Build payroll only after attendance and leave calculations are signed off.
+5. Add multiple-hostel assignment, warden/supervisor access and shift calendars.
+6. Build attendance-based payroll preparation reports and exports (not salary calculation/payslips).
 7. Improve dashboards, employee self-service and management MIS.
 
 ## Required validation before merge/deployment
