@@ -14,6 +14,7 @@ use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -114,6 +115,10 @@ class Fingerprints extends Component
     #[Renderless]
     public function showEditFingerprintModal(Fingerprint $fingerprint)
     {
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
+
+        $fingerprint = Fingerprint::findOrFail($fingerprint->id);
+        $this->selectedEmployeeId = $fingerprint->employee_id;
         $this->isEdit = true;
 
         $this->fingerprint = $fingerprint;
@@ -123,13 +128,33 @@ class Fingerprints extends Component
         $this->checkOut = $fingerprint->check_out;
     }
 
+    protected function validateManualAttendance(?int $ignoreFingerprintId = null): void
+    {
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
+
+        $this->validate([
+            'selectedEmployeeId' => 'required|integer|exists:employees,id',
+            'date' => 'required|date_format:Y-m-d',
+            'checkIn' => 'required|date_format:H:i',
+            'checkOut' => 'required|date_format:H:i',
+        ]);
+
+        $duplicate = Fingerprint::query()
+            ->where('employee_id', $this->selectedEmployeeId)
+            ->whereDate('date', $this->date)
+            ->when($ignoreFingerprintId, fn ($query) => $query->whereKeyNot($ignoreFingerprintId))
+            ->exists();
+
+        if ($duplicate) {
+            throw ValidationException::withMessages([
+                'date' => __('An attendance record already exists for this employee on the selected date. Edit the existing record instead.'),
+            ]);
+        }
+    }
+
     public function addFingerprint()
     {
-        $this->validate([
-            'date' => 'required',
-            'checkIn' => 'required',
-            'checkOut' => 'required',
-        ]);
+        $this->validateManualAttendance();
 
         Fingerprint::create([
             'employee_id' => $this->selectedEmployeeId,
@@ -145,13 +170,17 @@ class Fingerprints extends Component
 
     public function editFingerprint()
     {
-        $this->validate([
-            'date' => 'required',
-            'checkIn' => 'required',
-            'checkOut' => 'required',
-        ]);
+        $fingerprintId = $this->fingerprint?->id;
+        abort_unless($fingerprintId, 404);
 
-        $this->fingerprint->update([
+        $this->validateManualAttendance((int) $fingerprintId);
+
+        $fingerprint = Fingerprint::query()
+            ->whereKey($fingerprintId)
+            ->where('employee_id', $this->selectedEmployeeId)
+            ->firstOrFail();
+
+        $fingerprint->update([
             'date' => $this->date,
             'log' => $this->checkIn.' '.$this->checkOut,
             'check_in' => $this->checkIn,
@@ -171,6 +200,13 @@ class Fingerprints extends Component
 
     public function deleteFingerprint(Fingerprint $fingerprint)
     {
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
+
+        $fingerprint = Fingerprint::query()
+            ->whereKey($fingerprint->id)
+            ->where('employee_id', $this->selectedEmployeeId)
+            ->firstOrFail();
+
         $fingerprint->delete();
         $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
     }
