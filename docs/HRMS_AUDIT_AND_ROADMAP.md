@@ -79,10 +79,20 @@ Keep organizational department/designation separate from physical work location:
 
 Do not overload the existing centers table until its current production usage and holiday/working-hour dependencies are verified.
 
+### Hostel attendance access foundation (current implementation phase)
+
+- Added separate `hostels`, `hostel_user` and `employee_hostel_assignments` tables. This deliberately does not overload the existing organizational `centers` table.
+- Added Hostel and EmployeeHostelAssignment models and User/Employee relationships.
+- Added Warden and Hostel Supervisor roles through an idempotent seeder.
+- Attendance route now admits Admin, HR, Warden and Hostel Supervisor. Manual attendance list and mutations are scoped to employees with a current assignment in a hostel assigned to that user; record edits/deletes verify the assignment against the attendance date.
+- Excel import remains restricted to Admin/HR.
+- Remaining prerequisite before wardens can use this live: an Admin-facing screen/process to create hostel records, assign staff to hostels, and map users to hostels with the correct assignment_role. Until that assignment data exists, Warden/Supervisor accounts correctly see no employees.
+- Add automated authorization tests and staging verification before merge. Existing attendance table name `fingerprints` is retained for backward compatibility for now.
+
 ### Manual attendance and payroll preparation
 
 - Allow authorized HR/Admin users to add, edit and review daily check-in/check-out records.
-- Add a future Warden/Supervisor workflow scoped to the employee's assigned hostel/location; do not grant broad HR access to hostel users.
+- Add Admin-facing hostel and user/employee assignment management, then complete Warden/Supervisor attendance workflow scoped to assigned hostels; do not grant broad HR access to hostel users.
 - Validate employee, date and time formats; prevent duplicate employee/date entries and retain who created or amended each record.
 - Add reason and approver details for corrections, late marks, missing punches and overtime.
 - Derive monthly payable days, paid/unpaid leave, absences and approved overtime as payroll inputs.
