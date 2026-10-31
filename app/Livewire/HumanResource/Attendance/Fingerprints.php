@@ -159,8 +159,11 @@ class Fingerprints extends Component
 
         if (!Auth::user()->hasAnyRole(['Admin', 'HR'])) {
             $query->whereHas('employee.hostelAssignments', function ($assignment) {
-                $assignment->whereNull('end_date')
-                    ->whereDate('start_date', '<=', $this->toDate)
+                $assignment->whereDate('start_date', '<=', $this->toDate)
+                    ->where(function ($dates) {
+                        $dates->whereNull('end_date')
+                            ->orWhereDate('end_date', '>=', $this->fromDate);
+                    })
                     ->whereIn('hostel_id', Auth::user()->hostels()
                         ->wherePivotIn('assignment_role', Auth::user()->getRoleNames()->intersect(['Warden', 'Hostel Supervisor'])->all())
                         ->select('hostels.id'));
@@ -286,6 +289,8 @@ class Fingerprints extends Component
 
     public function importFromExcel()
     {
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
+
         $this->validate(
             [
                 'file' => 'required|mimes:xlsx',
