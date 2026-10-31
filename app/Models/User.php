@@ -46,6 +46,13 @@ class User extends Authenticatable
     protected $appends = ['profile_photo_url'];
 
     // 👉 Links
+    public function hostels(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Hostel::class)
+            ->withPivot('assignment_role')
+            ->withTimestamps();
+    }
+
     public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);

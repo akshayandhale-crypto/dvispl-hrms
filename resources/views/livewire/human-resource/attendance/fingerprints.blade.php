@@ -86,17 +86,23 @@
                   <a class="nav-item d-xl-none nav-link px-0 mx-2" href="javascript:void(0)" data-bs-toggle="sidebar" data-overlay="" data-target="#app-calendar-sidebar">
                     <i class="ti ti-menu-2 ti-sm"></i>
                   </a>
-                  <div class="flex-shrink-0 avatar">
-                    <img src="{{ Storage::disk("public")->exists($selectedEmployee->profile_photo_path) ? Storage::disk("public")->url($selectedEmployee->profile_photo_path) : Storage::disk("public")->url('profile-photos/.default-photo.jpg') }}" class="rounded-circle" alt="Avatar">
-                  </div>
-                  <div class="chat-contact-info flex-grow-1 ms-2">
-                    <h6 class="m-0">{{ $selectedEmployee->full_name }}</h6>
-                    <small class="user-status text-muted">{{ $selectedEmployee->current_position }}</small>
-                  </div>
+                  @if ($selectedEmployee)
+                    <div class="flex-shrink-0 avatar">
+                      <img src="{{ Storage::disk("public")->exists($selectedEmployee->profile_photo_path) ? Storage::disk("public")->url($selectedEmployee->profile_photo_path) : Storage::disk("public")->url('profile-photos/.default-photo.jpg') }}" class="rounded-circle" alt="Avatar">
+                    </div>
+                    <div class="chat-contact-info flex-grow-1 ms-2">
+                      <h6 class="m-0">{{ $selectedEmployee->full_name }}</h6>
+                      <small class="user-status text-muted">{{ $selectedEmployee->current_position }}</small>
+                    </div>
+                  @else
+                    <div class="chat-contact-info flex-grow-1 ms-2">
+                      <h6 class="m-0">{{ __('No staff assigned to your hostel yet') }}</h6>
+                    </div>
+                  @endif
                 </div>
 
                 <div class="col-5 btn-group d-flex justify-content-end">
-                  <button {{ Auth::user()->hasRole('Admin') ? "" : "disabled" }}  wire:click.prevent='showNewFingerprintModal' type="button" class="btn btn-primary waves-effect waves-light"
+                  <button {{ $employees->isEmpty() ? "disabled" : "" }} wire:click.prevent='showNewFingerprintModal' type="button" class="btn btn-primary waves-effect waves-light"
                           data-bs-toggle="offcanvas" data-bs-target="#addRecordSidebar" aria-controls="addRecordSidebar"><i
                           class="ti ti-plus me-1"></i> {{ __('Add New Record') }}
                   </button>

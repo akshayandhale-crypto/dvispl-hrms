@@ -48,7 +48,7 @@ Route::middleware([
     });
 
     // 👉 Human Resource
-    Route::group(['middleware' => ['role:Admin|HR']], function () {
+    Route::group(['middleware' => ['role:Admin|HR|Warden|Hostel Supervisor']], function () {
         Route::prefix('attendance')->group(function () {
             Route::get('/fingerprints', Fingerprints::class)->name('attendance-fingerprints');
         });
