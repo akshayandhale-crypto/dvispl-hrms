@@ -187,6 +187,7 @@ class Fingerprints extends Component
         abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
 
         $fingerprint = Fingerprint::findOrFail($fingerprint->id);
+        abort_unless($this->employeeIsAccessibleOnDate((int) $fingerprint->employee_id, Carbon::parse($fingerprint->date)->toDateString()), 403);
         $this->selectedEmployeeId = $fingerprint->employee_id;
         $this->isEdit = true;
 
@@ -213,7 +214,7 @@ class Fingerprints extends Component
         $duplicate = Fingerprint::query()
             ->where('employee_id', $this->selectedEmployeeId)
             ->whereDate('date', $this->date)
-            ->when($ignoreFingerprintId, fn ($query) => $query->whereKeyNot($ignoreFingerprintId))
+            ->when($ignoreFingerprintId, fn ($query) => $query->where('id', '!=', $ignoreFingerprintId))
             ->exists();
 
         if ($duplicate) {
@@ -277,6 +278,7 @@ class Fingerprints extends Component
             ->whereKey($fingerprint->id)
             ->where('employee_id', $this->selectedEmployeeId)
             ->firstOrFail();
+        abort_unless($this->employeeIsAccessibleOnDate((int) $fingerprint->employee_id, Carbon::parse($fingerprint->date)->toDateString()), 403);
 
         $fingerprint->delete();
         $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
