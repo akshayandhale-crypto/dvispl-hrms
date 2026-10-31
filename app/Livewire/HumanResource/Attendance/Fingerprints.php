@@ -65,7 +65,7 @@ class Fingerprints extends Component
         $this->employees = $this->accessibleEmployees()->orderBy('first_name')->get();
 
         $this->selectedEmployeeId = Auth::user()->hasAnyRole(['Admin', 'HR'])
-            ? Auth::user()->employee_id
+            ? (Auth::user()->employee_id ?: $this->employees->first()?->id)
             : $this->employees->first()?->id;
         $this->selectedEmployee = $this->selectedEmployeeId
             ? $this->accessibleEmployees()->find($this->selectedEmployeeId)
@@ -187,7 +187,7 @@ class Fingerprints extends Component
     #[Renderless]
     public function showEditFingerprintModal(Fingerprint $fingerprint)
     {
-        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR']), 403);
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR', 'Warden', 'Hostel Supervisor']), 403);
 
         $fingerprint = Fingerprint::findOrFail($fingerprint->id);
         abort_unless($this->employeeIsAccessibleOnDate((int) $fingerprint->employee_id, Carbon::parse($fingerprint->date)->toDateString()), 403);
