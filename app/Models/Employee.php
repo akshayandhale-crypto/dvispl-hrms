@@ -46,6 +46,11 @@ class Employee extends Model
         return $this->hasOne(User::class);
     }
 
+    public function hostelAssignments(): HasMany
+    {
+        return $this->hasMany(EmployeeHostelAssignment::class);
+    }
+
     public function fingerprints(): HasMany
     {
         return $this->hasMany(Fingerprint::class);
