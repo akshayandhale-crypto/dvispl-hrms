@@ -14,6 +14,7 @@ use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
@@ -59,14 +60,62 @@ class Fingerprints extends Component
 
     public function mount()
     {
-        $this->employees = Employee::all();
+        abort_unless(Auth::user()->hasAnyRole(['Admin', 'HR', 'Warden', 'Hostel Supervisor']), 403);
 
-        $this->selectedEmployeeId = Auth::user()->employee_id;
-        $this->selectedEmployee = Employee::find($this->selectedEmployeeId);
+        $this->employees = $this->accessibleEmployees()->orderBy('first_name')->get();
+
+        $this->selectedEmployeeId = Auth::user()->hasAnyRole(['Admin', 'HR'])
+            ? Auth::user()->employee_id
+            : $this->employees->first()?->id;
+        $this->selectedEmployee = $this->selectedEmployeeId
+            ? $this->accessibleEmployees()->find($this->selectedEmployeeId)
+            : null;
 
         $currentDate = Carbon::now();
         $previousMonth = $currentDate->copy()->subMonth();
-        $this->dateRange = $previousMonth->format('Y-n-1').' to '.$currentDate;
+        $this->dateRange = $previousMonth->format('Y-m-01').' to '.$currentDate->format('Y-m-d');
+    }
+
+    protected function accessibleEmployees(): Builder
+    {
+        $user = Auth::user();
+
+        if ($user->hasAnyRole(['Admin', 'HR'])) {
+            return Employee::query()->where('is_active', true);
+        }
+
+        abort_unless($user->hasAnyRole(['Warden', 'Hostel Supervisor']), 403);
+
+        $assignmentRoles = $user->getRoleNames()
+            ->intersect(['Warden', 'Hostel Supervisor'])
+            ->values()
+            ->all();
+
+        $hostelIds = $user->hostels()
+            ->wherePivotIn('assignment_role', $assignmentRoles)
+            ->where('hostels.is_active', true)
+            ->select('hostels.id');
+
+        return Employee::query()
+            ->where('is_active', true)
+            ->whereHas('hostelAssignments', function ($query) use ($hostelIds) {
+                $query->whereIn('hostel_id', $hostelIds)
+                    ->whereNull('end_date');
+            });
+    }
+
+    protected function employeeIsAccessibleOnDate(int $employeeId, string $date): bool
+    {
+        return $this->accessibleEmployees()
+            ->whereKey($employeeId)
+            ->whereHas('hostelAssignments', function ($query) use ($date) {
+                $query->whereDate('start_date', '<=', $date)
+                    ->where(function ($assignment) use ($date) {
+                        $assignment->whereNull('end_date')
+                            ->orWhereDate('end_date', '>=', $date);
+                    });
+            })
+            ->exists();
     }
 
     public function render()
@@ -80,25 +129,45 @@ class Fingerprints extends Component
 
     public function applyFilter()
     {
-        // Employee
-        $this->selectedEmployee = Employee::find($this->selectedEmployeeId);
+        $dates = explode(' to ', (string) $this->dateRange);
+        abort_unless(count($dates) === 2, 422);
 
-        // Date range
-        if ($this->dateRange) {
-            $dates = explode(' to ', $this->dateRange);
+        $this->fromDate = Carbon::parse($dates[0])->toDateString();
+        $this->toDate = Carbon::parse($dates[1])->toDateString();
+        abort_if($this->fromDate > $this->toDate, 422);
 
-            $this->fromDate = $dates[0];
-            $this->toDate = $dates[1];
+        $this->employees = $this->accessibleEmployees()->orderBy('first_name')->get();
+
+        if (!$this->selectedEmployeeId) {
+            $this->selectedEmployee = null;
+            return Fingerprint::query()->whereRaw('1 = 0')->paginate(7);
         }
 
-        // Return filtered fingerprints
-        return Fingerprint::filteredFingerprints(
-            $this->selectedEmployee->id,
-            $this->fromDate,
-            $this->toDate,
-            $this->isAbsence,
-            $this->isOneFingerprint
-        )->paginate(7);
+        abort_unless(
+            $this->accessibleEmployees()->whereKey($this->selectedEmployeeId)->exists(),
+            403
+        );
+
+        $this->selectedEmployee = Employee::findOrFail($this->selectedEmployeeId);
+
+        $query = Fingerprint::query()
+            ->where('employee_id', $this->selectedEmployeeId)
+            ->whereBetween('date', [$this->fromDate, $this->toDate])
+            ->when($this->isAbsence, fn ($q) => $q->whereNull('log'))
+            ->when($this->isOneFingerprint, fn ($q) => $q->whereNotNull('check_in')->whereNull('check_out'))
+            ->orderBy('date');
+
+        if (!Auth::user()->hasAnyRole(['Admin', 'HR'])) {
+            $query->whereHas('employee.hostelAssignments', function ($assignment) {
+                $assignment->whereNull('end_date')
+                    ->whereDate('start_date', '<=', $this->toDate)
+                    ->whereIn('hostel_id', Auth::user()->hostels()
+                        ->wherePivotIn('assignment_role', Auth::user()->getRoleNames()->intersect(['Warden', 'Hostel Supervisor'])->all())
+                        ->select('hostels.id'));
+            });
+        }
+
+        return $query->paginate(7);
     }
 
     public function submitFingerprint()
@@ -138,6 +207,8 @@ class Fingerprints extends Component
             'checkIn' => 'required|date_format:H:i',
             'checkOut' => 'required|date_format:H:i',
         ]);
+
+        abort_unless($this->employeeIsAccessibleOnDate((int) $this->selectedEmployeeId, $this->date), 403);
 
         $duplicate = Fingerprint::query()
             ->where('employee_id', $this->selectedEmployeeId)
@@ -256,13 +327,7 @@ class Fingerprints extends Component
 
     public function exportToExcel()
     {
-        $fingerprints = Fingerprint::filteredFingerprints(
-            $this->selectedEmployee->id,
-            $this->fromDate,
-            $this->toDate,
-            $this->isAbsence,
-            $this->isOneFingerprint
-        )->get();
+        $fingerprints = $this->applyFilter()->getCollection();
 
         $fileName = 'Fingerprints - '.Carbon::now();
 
