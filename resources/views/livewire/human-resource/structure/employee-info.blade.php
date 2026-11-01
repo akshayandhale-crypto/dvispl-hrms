@@ -46,7 +46,7 @@
       </div> --}}
       <div class="user-profile-header d-flex flex-column flex-sm-row text-sm-start text-center mb-4">
         <div class="flex-shrink-0 mt-n2 mx-sm-0 mx-auto">
-          <img src="{{ Storage::disk("public")->exists($employee->profile_photo_path) ? Storage::disk("public")->url($employee->profile_photo_path) : Storage::disk("public")->url('profile-photos/.default-photo.jpg') }}" class="d-block h-auto ms-0 ms-sm-4 rounded user-profile-img" width="100px">
+          <img src="{{ !empty($employee->profile_photo_path) && Storage::disk("public")->exists($employee->profile_photo_path) ? Storage::disk("public")->url($employee->profile_photo_path) : Storage::disk("public")->url('profile-photos/.default-photo.jpg') }}" class="d-block h-auto ms-0 ms-sm-4 rounded user-profile-img" width="100px">
         </div>
         <div class="flex-grow-1 mt-3 mt-sm-5">
           <div class="d-flex align-items-md-end align-items-sm-start align-items-center justify-content-md-between justify-content-start mx-4 flex-md-row flex-column gap-4">
@@ -168,7 +168,7 @@
           <li class="d-flex align-items-center mb-3"><i class="ti ti-home"></i><span class="fw-bold mx-2">{{ __('Address') }}:</span> <span>{{ $employee->address }}</span></li>
         </ul>
         <ul class="list-unstyled mb-4 mt-3">
-          <li class="d-flex align-items-center mb-3"><i class="ti ti-phone-call"></i><span class="fw-bold mx-2">{{ __('Mobile') }}:</span> <span style="direction: ltr">{{ '+963 ' . number_format($employee->mobile_number, 0, '', ' ') }}</span></li>
+          <li class="d-flex align-items-center mb-3"><i class="ti ti-phone-call"></i><span class="fw-bold mx-2">{{ __('Mobile') }}:</span> <span style="direction: ltr">{{ $employee->mobile_number ? '+91 ' . $employee->mobile_number : __('Not provided') }}</span></li>
         </ul>
         <ul class="list-unstyled mb-4 mt-3">
           <li class="d-flex align-items-center mb-3"><i class="ti ti-rocket"></i><span class="fw-bold mx-2">{{ __('Started') }}:</span> <span>{{ $employee->join_at }}</span></li>
