@@ -4,6 +4,8 @@ namespace App\Livewire\HumanResource\Structure;
 
 use App\Models\Contract;
 use App\Models\Employee;
+use App\Models\Hostel;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -11,31 +13,36 @@ class Employees extends Component
 {
     use WithPagination;
 
-    // 👉 Variables
-    public $searchTerm = null;
-
+    public $searchTerm = '';
     public $contracts;
-
+    public $hostels;
     public $employee;
-
     public $employeeInfo = [];
-
     public $isEdit = false;
-
     public $confirmedId;
 
-    // 👉 Mount
-    public function mount()
+    public function mount(): void
     {
         $this->contracts = Contract::all();
+        $this->hostels = Hostel::where('is_active', true)->orderBy('name')->get();
     }
 
-    // 👉 Render
     public function render()
     {
-        $employees = Employee::where('id', 'like', '%'.$this->searchTerm.'%')
-            ->orWhere('first_name', 'like', '%'.$this->searchTerm.'%')
-            ->orWhere('last_name', 'like', '%'.$this->searchTerm.'%')
+        $employees = Employee::query()
+            ->with(['hostelAssignments' => function ($query) {
+                $query->whereNull('end_date')->with('hostel')->latest('start_date');
+            }])
+            ->when($this->searchTerm, function ($query) {
+                $term = '%'.$this->searchTerm.'%';
+                $query->where(function ($search) use ($term) {
+                    $search->where('id', 'like', $term)
+                        ->orWhere('first_name', 'like', $term)
+                        ->orWhere('staff_department', 'like', $term)
+                        ->orWhereHas('hostelAssignments.hostel', fn ($hostel) => $hostel->where('name', 'like', $term));
+                });
+            })
+            ->orderBy('id')
             ->paginate(20);
 
         return view('livewire.human-resource.structure.employees', [
@@ -43,112 +50,125 @@ class Employees extends Component
         ]);
     }
 
-    // 👉 Submit employee
-    public function submitEmployee()
+    public function submitEmployee(): void
     {
         $this->validate([
-            'employeeInfo.id' => 'required',
-            'employeeInfo.contractId' => 'required',
-            'employeeInfo.firstName' => 'required',
-            'employeeInfo.fatherName' => 'required',
-            'employeeInfo.lastName' => 'required',
-            'employeeInfo.motherName' => 'required',
-            'employeeInfo.birthAndPlace' => 'required',
-            'employeeInfo.nationalNumber' => 'required|string|max:20',
-            'employeeInfo.mobileNumber' => ['required', 'digits:10', 'regex:/^[6-9][0-9]{9}$/'],
-            'employeeInfo.degree' => 'required',
-            'employeeInfo.gender' => 'required',
-            'employeeInfo.address' => 'required',
+            'employeeInfo.firstName' => 'required|string|max:255',
+            'employeeInfo.hostelId' => 'required|integer|exists:hostels,id',
+            'employeeInfo.department' => 'required|in:Housekeeping,Security',
+            'employeeInfo.startDate' => 'required|date',
+            'employeeInfo.isReliever' => 'boolean',
+            'employeeInfo.relieverType' => 'nullable|required_if:employeeInfo.isReliever,1|in:Girls Reliever,Boys Reliever',
+            'employeeInfo.notes' => 'nullable|string|max:1000',
         ]);
 
         $this->isEdit ? $this->editEmployee() : $this->addEmployee();
     }
 
-    // 👉 Store employee
-    public function showCreateEmployeeModal()
+    public function showCreateEmployeeModal(): void
     {
-        $this->reset('isEdit', 'employeeInfo');
+        $this->reset('isEdit', 'employee', 'employeeInfo');
+        $this->employeeInfo = [
+            'department' => 'Housekeeping',
+            'startDate' => now()->toDateString(),
+            'isReliever' => false,
+            'relieverType' => '',
+        ];
     }
 
     public function addEmployee()
     {
-        $createdEmployee = Employee::create([
-            'id' => $this->employeeInfo['id'],
-            'contract_id' => $this->employeeInfo['contractId'],
-            'first_name' => $this->employeeInfo['firstName'],
-            'father_name' => $this->employeeInfo['fatherName'],
-            'last_name' => $this->employeeInfo['lastName'],
-            'mother_name' => $this->employeeInfo['motherName'],
-            'birth_and_place' => $this->employeeInfo['birthAndPlace'],
-            'national_number' => $this->employeeInfo['nationalNumber'],
-            'mobile_number' => $this->employeeInfo['mobileNumber'],
-            'degree' => $this->employeeInfo['degree'],
-            'gender' => $this->employeeInfo['gender'],
-            'address' => $this->employeeInfo['address'],
-            'notes' => isset($this->employeeInfo['notes']) ? $this->employeeInfo['notes'] : null,
-        ]);
+        $createdEmployee = DB::transaction(function () {
+            $employee = Employee::create([
+                'contract_id' => null,
+                'first_name' => trim($this->employeeInfo['firstName']),
+                'father_name' => null,
+                'last_name' => null,
+                'mother_name' => null,
+                'birth_and_place' => null,
+                'national_number' => null,
+                'mobile_number' => null,
+                'degree' => null,
+                'gender' => null,
+                'address' => null,
+                'staff_department' => $this->employeeInfo['department'],
+                'is_reliever' => (bool) ($this->employeeInfo['isReliever'] ?? false),
+                'reliever_type' => ($this->employeeInfo['isReliever'] ?? false) ? $this->employeeInfo['relieverType'] : null,
+                'notes' => $this->employeeInfo['notes'] ?? null,
+                'profile_photo_path' => null,
+            ]);
+
+            $employee->hostelAssignments()->create([
+                'hostel_id' => $this->employeeInfo['hostelId'],
+                'start_date' => $this->employeeInfo['startDate'],
+                'notes' => $this->employeeInfo['isReliever'] ?? false ? 'Reliever staff' : null,
+            ]);
+
+            return $employee;
+        });
 
         $this->dispatch('closeModal', elementId: '#employeeModal');
-        $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
-
-        session()->flash('openTimelineModal', true);
-
-        return redirect()->route('structure-employees-info', ['id' => $createdEmployee->id]);
+        $this->dispatch('toastr', type: 'success', message: __('Employee added successfully.'));
+        return redirect()->route('structure-employees');
     }
 
-    // 👉 Update employee
-    public function showEditEmployeeModal(Employee $employee)
+    public function showEditEmployeeModal(Employee $employee): void
     {
         $this->isEdit = true;
-
         $this->employee = $employee;
+        $assignment = $employee->hostelAssignments()->whereNull('end_date')->latest('start_date')->first();
 
-        $this->employeeInfo['id'] = $employee->id;
-        $this->employeeInfo['contractId'] = $employee->contract_id;
-        $this->employeeInfo['firstName'] = $employee->first_name;
-        $this->employeeInfo['fatherName'] = $employee->father_name;
-        $this->employeeInfo['lastName'] = $employee->last_name;
-        $this->employeeInfo['motherName'] = $employee->mother_name;
-        $this->employeeInfo['birthAndPlace'] = $employee->birth_and_place;
-        $this->employeeInfo['nationalNumber'] = $employee->national_number;
-        $this->employeeInfo['mobileNumber'] = $employee->mobile_number;
-        $this->employeeInfo['degree'] = $employee->degree;
-        $this->employeeInfo['gender'] = $employee->gender;
-        $this->employeeInfo['address'] = $employee->address;
-        $this->employeeInfo['notes'] = $employee->notes;
+        $this->employeeInfo = [
+            'firstName' => $employee->first_name,
+            'department' => $employee->staff_department,
+            'hostelId' => $assignment?->hostel_id,
+            'startDate' => $assignment?->start_date?->format('Y-m-d') ?? now()->toDateString(),
+            'isReliever' => (bool) $employee->is_reliever,
+            'relieverType' => $employee->reliever_type,
+            'notes' => $employee->notes,
+        ];
     }
 
-    public function editEmployee()
+    public function editEmployee(): void
     {
-        $this->employee->update([
-            'id' => $this->employeeInfo['id'],
-            'contract_id' => $this->employeeInfo['contractId'],
-            'first_name' => $this->employeeInfo['firstName'],
-            'father_name' => $this->employeeInfo['fatherName'],
-            'last_name' => $this->employeeInfo['lastName'],
-            'mother_name' => $this->employeeInfo['motherName'],
-            'birth_and_place' => $this->employeeInfo['birthAndPlace'],
-            'national_number' => $this->employeeInfo['nationalNumber'],
-            'mobile_number' => $this->employeeInfo['mobileNumber'],
-            'degree' => $this->employeeInfo['degree'],
-            'gender' => $this->employeeInfo['gender'],
-            'address' => $this->employeeInfo['address'],
-            'notes' => isset($this->employeeInfo['notes']) ? $this->employeeInfo['notes'] : null,
-        ]);
+        DB::transaction(function () {
+            $this->employee->update([
+                'first_name' => trim($this->employeeInfo['firstName']),
+                'staff_department' => $this->employeeInfo['department'],
+                'is_reliever' => (bool) ($this->employeeInfo['isReliever'] ?? false),
+                'reliever_type' => ($this->employeeInfo['isReliever'] ?? false) ? $this->employeeInfo['relieverType'] : null,
+                'notes' => $this->employeeInfo['notes'] ?? null,
+            ]);
+
+            $assignment = $this->employee->hostelAssignments()->whereNull('end_date')->latest('start_date')->first();
+            if ($assignment && (int) $assignment->hostel_id === (int) $this->employeeInfo['hostelId']) {
+                $assignment->update(['start_date' => $this->employeeInfo['startDate']]);
+            } else {
+                if ($assignment) {
+                    $assignment->update(['end_date' => now()->toDateString()]);
+                }
+
+                $this->employee->hostelAssignments()->create([
+                    'hostel_id' => $this->employeeInfo['hostelId'],
+                    'start_date' => $this->employeeInfo['startDate'],
+                    'notes' => 'Hostel assignment updated',
+                ]);
+            }
+        });
 
         $this->dispatch('closeModal', elementId: '#employeeModal');
-        $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
+        $this->dispatch('toastr', type: 'success', message: __('Employee updated successfully.'));
     }
 
-    // 👉 Delete employee
-    public function confirmDeleteEmployee($id)
+    public function confirmDeleteEmployee($id): void
     {
-        $this->confirmedId = $id;
+        $this->confirmedId = (int) $id;
     }
 
-    public function deleteEmployee(Employee $employee)
+    public function deleteEmployee(Employee $employee): void
     {
         $employee->delete();
-        $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
+        $this->confirmedId = null;
+        $this->dispatch('toastr', type: 'success', message: __('Employee archived successfully.'));
     }
 }
