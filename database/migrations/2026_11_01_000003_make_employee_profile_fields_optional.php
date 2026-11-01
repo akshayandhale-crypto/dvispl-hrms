@@ -25,6 +25,19 @@ return new class extends Migration
             $table->boolean('is_reliever')->default(false)->after('staff_department');
             $table->string('reliever_type', 40)->nullable()->after('is_reliever');
         });
+
+        foreach ([
+            ['name' => 'Ahilya Hostel', 'code' => 'AHILYA'],
+            ['name' => 'Ambika Hostel', 'code' => 'AMBIKA'],
+            ['name' => 'Savitri Hostel', 'code' => 'SAVITRI'],
+            ['name' => 'Eklavya Hostel', 'code' => 'EKLAVYA'],
+            ['name' => 'Vivekanand Hostel', 'code' => 'VIVEKANAND'],
+        ] as $hostel) {
+            DB::table('hostels')->updateOrInsert(
+                ['code' => $hostel['code']],
+                ['name' => $hostel['name'], 'is_active' => true, 'updated_at' => now(), 'created_at' => now()]
+            );
+        }
     }
 
     public function down(): void
