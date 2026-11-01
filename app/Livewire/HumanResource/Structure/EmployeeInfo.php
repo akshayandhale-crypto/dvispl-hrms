@@ -76,14 +76,19 @@ class EmployeeInfo extends Component
 
         if ($this->employee->is_active == true) {
             $this->employee->is_active = false;
-            $presentTimeline->end_date = Carbon::now();
+            if ($presentTimeline) {
+                $presentTimeline->end_date = Carbon::now();
+                $presentTimeline->save();
+            }
         } else {
             $this->employee->is_active = true;
-            $presentTimeline->end_date = null;
+            if ($presentTimeline) {
+                $presentTimeline->end_date = null;
+                $presentTimeline->save();
+            }
         }
 
         $this->employee->save();
-        $presentTimeline->save();
 
         $this->dispatch('toastr', type: 'success' /* , title: 'Done!' */, message: __('Going Well!'));
     }
