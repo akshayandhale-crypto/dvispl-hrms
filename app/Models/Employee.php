@@ -38,6 +38,9 @@ class Employee extends Model
         'hourly_counter',
         'is_active',
         'profile_photo_path',
+        'staff_department',
+        'is_reliever',
+        'reliever_type',
     ];
 
     // 👉 Links
@@ -114,12 +117,12 @@ class Employee extends Model
 
     public function getFullNameAttribute()
     {
-        return $this->first_name.' '.$this->father_name.' '.$this->last_name;
+        return trim(implode(' ', array_filter([$this->first_name, $this->father_name, $this->last_name])));
     }
 
     public function getShortNameAttribute()
     {
-        return $this->first_name.' '.$this->last_name;
+        return trim(implode(' ', array_filter([$this->first_name, $this->last_name])));
     }
 
     // 👉 Scopes
@@ -205,9 +208,9 @@ class Employee extends Model
             ->first();
         if ($data) {
             return $data->department->name;
-        } else {
-            return '---';
         }
+
+        return $this->staff_department ?: '---';
     }
 
     public function getCurrentCenterAttribute()

@@ -1,114 +1,78 @@
 <div>
+@php $configData = Helper::appClasses(); @endphp
+@section('title', 'Hostel Staff - HRMS')
 
-@php
-  $configData = Helper::appClasses();
-@endphp
-
-@section('title', 'Employees - Structure')
-
-@section('page-style')
-  <style>
-    .btn-tr {
-      opacity: 0;
-    }
-
-    tr:hover .btn-tr {
-      display: inline-block;
-      opacity: 1;
-    }
-
-    tr:hover .td {
-      color: #7367f0 !important;
-    }
-  </style>
-@endsection
-
-<div class="demo-inline-spacing">
-  <button wire:click='showCreateEmployeeModal' type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#employeeModal">
-    <span class="ti-xs ti ti-plus me-1"></span>{{ __('Add New Employee') }}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+  <div>
+    <h4 class="mb-1">Hostel Staff</h4>
+    <p class="text-muted mb-0">Manage housekeeping, security and reliever staff across hostels.</p>
+  </div>
+  <button wire:click="showCreateEmployeeModal" type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#employeeModal">
+    <span class="ti ti-plus me-1"></span>{{ __('Add Staff Member') }}
   </button>
 </div>
-<br>
+
 <div class="card">
-  <div class="card-header d-flex justify-content-between">
-    <h5 class="card-title m-0 me-2">{{ __('Employees') }}</h5>
-    <div class="col-4">
-      <input wire:model.live="searchTerm" autofocus type="text" class="form-control" placeholder="{{ __('Search (ID, Name...)') }}">
+  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h5 class="card-title mb-0">Staff Directory</h5>
+    <div class="col-md-4">
+      <input wire:model.live.debounce.300ms="searchTerm" type="search" class="form-control" placeholder="Search name, hostel or department">
     </div>
   </div>
-  <div class="table-responsive text-nowrap">
+  <div class="table-responsive">
     <table class="table">
       <thead>
         <tr>
-          <th class="col-1">{{ __('ID') }}</th>
-          <th class="col-5">{{ __('Name') }}</th>
-          <th class="col-2">{{ __('Mobile') }}</th>
-          <th class="col-2">{{ __('Status') }}</th>
-          <th class="col-2">{{ __('Actions') }}</th>
+          <th>ID</th><th>Staff Name</th><th>Hostel</th><th>Department</th><th>Category</th><th>Status</th><th>Actions</th>
         </tr>
       </thead>
-      <tbody class="table-border-bottom-0">
+      <tbody>
         @forelse($employees as $employee)
-        <tr>
-          <td>{{ $employee->id }}</td>
-          <td>
-            <ul class="list-unstyled users-list m-0 avatar-group d-flex align-items-center">
-              <li class="avatar avatar-xs pull-up">
-                <a href="{{ route('structure-employees-info', $employee->id) }}">
-                  <img src="{{ Storage::disk("public")->url($employee->profile_photo_path) }}" alt="Avatar" class="rounded-circle">
-                  {{ $employee->full_name }}
-                </a>
-              </li>
-            </ul>
-          </td>
-          <td style="direction: ltr">{{ '+91 ' . $employee->mobile_number }}</td>
-          <td>
-            @if ($employee->is_active)
-              <span class="badge bg-label-success me-1">{{ __('Active') }}</span>
-            @else
-              <span class="badge bg-label-danger me-1">{{ __('Out of work') }}</span>
-            @endif
-          </td>
-          <td>
-            <button type="button" class="btn btn-sm btn-tr rounded-pill btn-icon btn-outline-secondary waves-effect">
-              <span wire:click='showEditEmployeeModal({{ $employee }})' data-bs-toggle="modal" data-bs-target="#employeeModal" class="ti ti-pencil"></span>
-            </button>
-            <button type="button" class="btn btn-sm btn-tr rounded-pill btn-icon btn-outline-danger waves-effect">
-              <span wire:click.prevent='confirmDeleteEmployee({{ $employee->id }})' class="ti ti-trash"></span>
-            </button>
-            @if ($confirmedId === $employee->id)
-            <button wire:click.prevent='deleteEmployee({{ $employee }})' type="button" class="btn btn-sm btn-danger waves-effect waves-light">{{ __('Sure?') }}</button>
-          @endif
-          </td>
-        </tr>
+          @php $assignment = $employee->hostelAssignments->first(); @endphp
+          <tr>
+            <td>{{ $employee->id }}</td>
+            <td>
+              <a href="{{ route('structure-employees-info', $employee->id) }}">{{ $employee->full_name }}</a>
+            </td>
+            <td>{{ $assignment?->hostel?->name ?? 'Not assigned' }}</td>
+            <td>{{ $employee->staff_department }}</td>
+            <td>
+              @if($employee->is_reliever)
+                <span class="badge bg-label-info">{{ $employee->reliever_type ?: 'Reliever' }}</span>
+              @else
+                <span class="badge bg-label-secondary">Regular</span>
+              @endif
+            </td>
+            <td>
+              @if($employee->is_active)
+                <span class="badge bg-label-success">Active</span>
+              @else
+                <span class="badge bg-label-danger">Inactive</span>
+              @endif
+            </td>
+            <td>
+              <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" wire:click="showEditEmployeeModal({{ $employee->id }})" data-bs-toggle="modal" data-bs-target="#employeeModal" title="Edit">
+                <i class="ti ti-pencil"></i>
+              </button>
+              <button type="button" class="btn btn-sm btn-icon btn-outline-danger" wire:click="confirmDeleteEmployee({{ $employee->id }})" title="Archive">
+                <i class="ti ti-archive"></i>
+              </button>
+              @if($confirmedId === $employee->id)
+                <button type="button" class="btn btn-sm btn-danger" wire:click="deleteEmployee({{ $employee->id }})">Confirm archive</button>
+              @endif
+            </td>
+          </tr>
         @empty
-        <tr>
-          <td colspan="5">
-            <div class="mt-2 mb-2" style="text-align: center">
-                <h3 class="mb-1 mx-2">{{ __('Oopsie-doodle!') }}</h3>
-                <p class="mb-4 mx-2">
-                  {{ __('No data found, please sprinkle some data in my virtual bowl, and let the fun begin!') }}
-                </p>
-                <button class="btn btn-label-primary mb-4" data-bs-toggle="modal" data-bs-target="#employeeModal">
-                    {{ __('Add New Employee') }}
-                  </button>
-                <div>
-                  <img src="{{ asset('assets/img/illustrations/page-misc-under-maintenance.png') }}" width="200" class="img-fluid">
-                </div>
-            </div>
-          </td>
-        </tr>
+          <tr><td colspan="7" class="text-center py-5">
+            <h5>No staff records yet</h5>
+            <p class="text-muted mb-0">Add your hostel staff or import the approved staff list when ready.</p>
+          </td></tr>
         @endforelse
       </tbody>
     </table>
   </div>
-
-  <div class="row mt-4">
-    {{ $employees->links() }}
-  </div>
-
+  <div class="card-footer">{{ $employees->links() }}</div>
 </div>
 
-{{-- Modal --}}
 @include('_partials/_modals/modal-employee')
 </div>
